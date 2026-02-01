@@ -1,0 +1,8 @@
+streamlit
+gTTS
+langdetect
+googletrans==4.0.0-rc1
+pycountry
+wordcloud
+matplotlib
+nltk
