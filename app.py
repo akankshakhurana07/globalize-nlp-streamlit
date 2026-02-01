@@ -2,7 +2,7 @@ import streamlit as st
 from gtts import gTTS
 import os
 from langdetect import detect, lang_detect_exception
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 import pycountry
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
