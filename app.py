@@ -1,129 +1,110 @@
 import streamlit as st
-from gtts import gTTS
-import os
-from langdetect import detect, lang_detect_exception
 from deep_translator import GoogleTranslator
+from langdetect import detect
 import pycountry
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-from nltk.tokenize import word_tokenize
 import nltk
+from nltk.tokenize import word_tokenize
 
-# Download NLTK data
-nltk.download('punkt')
-nltk.download('words')
+# -------------------- NLTK SETUP --------------------
+@st.cache_resource
+def download_nltk():
+    nltk.download("punkt")
+    nltk.download("words")
 
-# Function to read text aloud
-def read_aloud(text, language='en'):
-    tts = gTTS(text=text, lang=language)
-    tts.save("temp.mp3")
-    os.system("start temp.mp3")
+download_nltk()
 
-# Function to generate word cloud
+# -------------------- FUNCTIONS --------------------
 def generate_wordcloud(text):
     english_words = set(nltk.corpus.words.words())
     words = word_tokenize(text)
-    english_words_in_text = [word for word in words if word.lower() in english_words]
-    english_text = ' '.join(english_words_in_text)
-    
-    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(english_text)
+    filtered_words = [w for w in words if w.lower() in english_words]
+    clean_text = " ".join(filtered_words)
+
+    wordcloud = WordCloud(
+        width=800,
+        height=400,
+        background_color="white"
+    ).generate(clean_text)
+
     fig, ax = plt.subplots()
-    ax.imshow(wordcloud, interpolation='bilinear')
-    ax.axis('off')
-    plt.tight_layout()
+    ax.imshow(wordcloud, interpolation="bilinear")
+    ax.axis("off")
     return fig
 
-# Main Streamlit app
-st.title("Globalize")
+def get_lang_code(lang_name):
+    try:
+        return pycountry.languages.lookup(lang_name).alpha_2
+    except:
+        return None
 
-# Set background image using custom CSS
-background_image = "back.jpg"  # Replace with your background image file name
-st.markdown(
-    f"""
-    <style>
-    .reportview-container {{
-        background: url(data:streamlit_env\back.jpg;base64,{background_image});
-        background-size: cover;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# -------------------- UI --------------------
+st.set_page_config(page_title="Globalize", layout="wide")
+st.title("🌍 Globalize – NLP Translation Studio")
 
-# Create a two-column layout
 col1, col2 = st.columns(2)
 
-# Get user input
 with col1:
     paragraph = st.text_area("Enter one paragraph:")
 
 with col2:
-    # Get list of all languages
-    all_languages = [lang.name for lang in pycountry.languages]
+    all_languages = sorted([lang.name for lang in pycountry.languages if hasattr(lang, "alpha_2")])
+    target_languages = st.multiselect(
+        "Select target languages:",
+        all_languages
+    )
 
-    # Get user input for target languages
-    target_languages_input = st.multiselect("Select the desired languages for translation:", all_languages)
-
-# Button to read aloud
-if st.button("Read Aloud"):
-    read_aloud(paragraph)
-
-# Detect the language of the input paragraph
-paragraph_language = None  # Initialize paragraph_language outside the try block
-if paragraph.strip():  # Check if paragraph is not empty
+# -------------------- LANGUAGE DETECTION --------------------
+if paragraph.strip():
     try:
-        paragraph_language = detect(paragraph)
-        language_name = pycountry.languages.get(alpha_2=paragraph_language).name
-        st.write("Detected language:", language_name)
-    except lang_detect_exception.LangDetectException as e:
-        st.error("Language detection failed: {}".format(e))
-        paragraph_language = 'en'
-        language_name = 'English'
-    except KeyError:
-        st.error("Language code not found in pycountry")
-        language_name = 'Unknown'
-    except Exception as e:
-        st.error("Error occurred during language detection: {}".format(e))
+        detected_lang = detect(paragraph)
+        detected_name = pycountry.languages.get(alpha_2=detected_lang).name
+        st.success(f"Detected language: {detected_name}")
+    except:
+        detected_lang = "en"
+        st.warning("Could not detect language, defaulting to English")
 
-# Translate the paragraph to English if it's not already in English
-translator = Translator()
-if paragraph_language and paragraph_language != 'en':
-    translated_paragraph = translator.translate(paragraph, dest='en').text
-    st.write("Translated to universal language English:", translated_paragraph)
-else:
-    translated_paragraph = paragraph
+# -------------------- TRANSLATE TO ENGLISH --------------------
+if paragraph.strip():
+    if detected_lang != "en":
+        translated_en = GoogleTranslator(
+            source="auto",
+            target="en"
+        ).translate(paragraph)
 
-# Generate and display word cloud
-if translated_paragraph.strip():  # Check if translated paragraph is not empty
+        st.subheader("🔁 Translated to English")
+        st.write(translated_en)
+    else:
+        translated_en = paragraph
+
+    # -------------------- WORD CLOUD --------------------
     try:
-        # Encode text to UTF-8 to handle non-Unicode characters
-        translated_paragraph = translated_paragraph.encode('utf-8', 'ignore').decode('utf-8')
-        wordcloud_fig = generate_wordcloud(translated_paragraph)
-        st.sidebar.subheader("Word Cloud")
-        st.sidebar.pyplot(wordcloud_fig)
+        fig = generate_wordcloud(translated_en)
+        st.sidebar.subheader("☁ Word Cloud")
+        st.sidebar.pyplot(fig)
     except Exception as e:
-        st.error(f"Error generating word cloud: {e}")
+        st.sidebar.error(f"WordCloud error: {e}")
 
-# Add image below the word cloud
-st.sidebar.subheader("Image")
-#st.sidebar.image("languages.jpg", use_column_width=True)
+# -------------------- MULTI-LANGUAGE TRANSLATION --------------------
+if st.button("Translate"):
+    if not paragraph.strip():
+        st.warning("Please enter text first")
+    else:
+        for lang in target_languages:
+            code = get_lang_code(lang)
+            if not code:
+                continue
 
-# Translate and read aloud
-if st.button("Translate and Read Aloud"):
-    target_languages = []
-    for lang_name in target_languages_input:
-        lang_code = pycountry.languages.lookup(lang_name).alpha_2
-        target_languages.append(lang_code)
-    
-    # Translate the paragraph into each target language, print, and read aloud
-    for target_language in target_languages:
-        try:
-            translated_paragraph = translator.translate(paragraph, dest=target_language).text
-            language_name = pycountry.languages.get(alpha_2=target_language).name
-            st.write(f"\nTranslated paragraph in {language_name}:")
-            st.write(translated_paragraph)
-            
-            # Read translated text aloud
-            read_aloud(translated_paragraph, target_language)
-        except Exception as e:
-            st.error(f"Translation to {language_name} failed: {e}")
+            try:
+                translated_text = GoogleTranslator(
+                    source="auto",
+                    target=code
+                ).translate(paragraph)
+
+                st.subheader(f"🌐 {lang}")
+                st.write(translated_text)
+
+            except Exception as e:
+                st.error(f"Failed for {lang}: {e}")
+
