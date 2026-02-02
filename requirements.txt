@@ -5,5 +5,4 @@ langdetect
 pycountry
 wordcloud
 matplotlib
-nltk
 
