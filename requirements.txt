@@ -1,7 +1,8 @@
 streamlit
-gTTS
+deep-translator
 langdetect
 pycountry
 wordcloud
 matplotlib
 nltk
+
